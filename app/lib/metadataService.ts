@@ -100,7 +100,7 @@ export async function extractMetadata(file: File): Promise<MetadataResult> {
   if (ext === 'pdf') {
     try {
       const pdfParse = await import('pdf-parse');
-      const data = await pdfParse.default(Buffer.from(buffer));
+      const data = await pdfParse(Buffer.from(buffer));
       const info = data.info || {};
       const doc: any = {};
       if (info.Author) doc.author = info.Author;
