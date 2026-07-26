@@ -8,7 +8,7 @@ import PremiumLogo from "@/app/components/ui/PremiumLogo";
 import { supabase } from "../lib/supabase";
 import { Suspense } from 'react';
 
-export default function MetadataPage() {
+export default function MetadataPage() { return (<Suspense fallback={<div className="min-h-screen bg-[#0B1220] flex items-center justify-center text-gray-400">Loading metadata...</div>}><MetadataContent /></Suspense>); } function MetadataContent() {
   const searchParams = useSearchParams();
   const evidenceId = searchParams?.get('evidenceId');
   
@@ -1213,3 +1213,4 @@ export default function MetadataPage() {
     </div>
   );
 }
+
