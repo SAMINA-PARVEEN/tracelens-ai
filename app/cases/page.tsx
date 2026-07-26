@@ -450,7 +450,7 @@ export default function CasesPage() {
                         </div>
                       </td>
                       <td className="py-3 px-6 text-sm text-gray-400">{caseItem.evidence_count || 0} files</td>
-                      <td className="py-3 px-6 text-sm text-gray-500">{caseItem.created_date || caseItem.date}</td>
+                      <td className="py-3 px-6 text-sm text-gray-500">{caseItem.created_date}</td>
                       <td className="py-3 px-6">
                         <div className="flex items-center space-x-1">
                           <button
