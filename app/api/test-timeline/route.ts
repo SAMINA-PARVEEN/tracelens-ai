@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTimelineEvents, getEventCount, getEventCountByType } from '@/app/lib/timelineService';
+import { getTimelineEvents, getEventTypeIcon } from '@/app/lib/timelineService';
 
 export async function GET() {
   try {
