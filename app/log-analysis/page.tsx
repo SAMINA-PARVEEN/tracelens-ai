@@ -13,9 +13,11 @@ export default function LogAnalysisPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analysisResult, setAnalysisResult] = useState<LogAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFileValidated, setIsFileValidated] = useState(false); // ADD THIS
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ============ CASE SELECTOR STATE ============
+  const ALLOWED_FILE_TYPES = ['.log', '.txt', '.csv'];
+
   const [cases, setCases] = useState<any[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string>("");
   const [showCaseModal, setShowCaseModal] = useState(false);
@@ -28,7 +30,6 @@ export default function LogAnalysisPage() {
     status: "Open",
   });
 
-  // ============ EVIDENCE STATE ============
   const [caseEvidence, setCaseEvidence] = useState<any[]>([]);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string>("");
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
@@ -37,7 +38,103 @@ export default function LogAnalysisPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [evidenceFileContent, setEvidenceFileContent] = useState<string | null>(null);
 
-  // ============ LOAD REAL CASES FROM SUPABASE ============
+  const isValidLogFile = (file: File): boolean => {
+    const fileName = file.name.toLowerCase();
+    const fileExtension = '.' + fileName.split('.').pop();
+    
+    if (!ALLOWED_FILE_TYPES.includes(fileExtension)) {
+      setError(`❌ Invalid file type. Please upload: ${ALLOWED_FILE_TYPES.join(', ')}`);
+      return false;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      setError('❌ File is too large. Maximum size is 50MB.');
+      return false;
+    }
+
+    return true;
+  };
+
+  // ============ STRICT VALIDATE LOG CONTENT ============
+  const isValidLogContent = (content: string): { valid: boolean; message: string } => {
+    if (!content || content.trim().length < 10) {
+      return { 
+        valid: false, 
+        message: '❌ File is empty or too short. Please upload a valid log file with at least 10 characters.' 
+      };
+    }
+
+    const lines = content.split('\n').filter(line => line.trim() !== '');
+    if (lines.length < 3) {
+      return { 
+        valid: false, 
+        message: '❌ File has too few lines. Please upload a log file with at least 3 lines of log data.' 
+      };
+    }
+
+    const logPatterns = [
+      { pattern: /\d{4}-\d{2}-\d{2}/, name: 'Date format (YYYY-MM-DD)' },
+      { pattern: /\d{2}:\d{2}:\d{2}/, name: 'Time format (HH:MM:SS)' },
+      { pattern: /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/, name: 'IP address' },
+      { pattern: /ERROR|WARN|INFO|DEBUG|TRACE|FATAL/i, name: 'Log level (ERROR, WARN, INFO, etc.)' },
+      { pattern: /\[.*\]/, name: 'Bracketed content' },
+      { pattern: /:\s*/, name: 'Colon separator' },
+      { pattern: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/, name: 'ISO timestamp' },
+      { pattern: /\[\d{1,4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\]/, name: 'Apache/Nginx log format' },
+      { pattern: /^\s*[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}/, name: 'Syslog format' },
+      { pattern: /<\d+>/, name: 'Syslog priority' },
+      { pattern: /[A-Za-z0-9]+=[A-Za-z0-9]+/, name: 'Key=Value pairs' },
+    ];
+
+    let foundPatterns = [];
+    for (const p of logPatterns) {
+      if (p.pattern.test(content)) {
+        foundPatterns.push(p.name);
+      }
+    }
+
+    const timestampLines = lines.filter(line => 
+      /\d{2}:\d{2}:\d{2}/.test(line) || 
+      /\d{4}-\d{2}-\d{2}/.test(line)
+    );
+
+    const hasLogLevel = /ERROR|WARN|INFO|DEBUG|TRACE|FATAL/i.test(content);
+    const hasTimestamp = /\d{2}:\d{2}:\d{2}/.test(content) || /\d{4}-\d{2}-\d{2}/.test(content);
+    const hasIP = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(content);
+    
+    // STRICT VALIDATION RULES:
+    if (foundPatterns.length >= 2) {
+      return { valid: true, message: '' };
+    }
+    
+    if (timestampLines.length >= 5 && hasLogLevel) {
+      return { valid: true, message: '' };
+    }
+    
+    if (timestampLines.length >= 3 && hasIP) {
+      return { valid: true, message: '' };
+    }
+
+    let message = '❌ This file does NOT contain valid log data.\n\n';
+    message += `📊 Detected ${foundPatterns.length} log pattern(s) (need at least 2):\n`;
+    if (foundPatterns.length > 0) {
+      message += `   ✓ Found: ${foundPatterns.join(', ')}\n`;
+    } else {
+      message += '   ✗ No log patterns detected\n';
+    }
+    message += `\n📄 Detected ${timestampLines.length} lines with timestamps (need at least 5)\n`;
+    message += `\n📋 A valid log file MUST contain:\n`;
+    message += '   • Timestamps (e.g., 2024-01-15 14:30:25)\n';
+    message += '   • Log levels (ERROR, WARN, INFO, DEBUG)\n';
+    message += '   • IP addresses (e.g., 192.168.1.1)\n';
+    message += '   • System messages or events\n';
+    message += '\n💡 This appears to be a regular text file, not a log file.\n';
+    message += '📁 Please upload a file containing actual log entries.';
+    
+    return { valid: false, message };
+  };
+
+  // ============ LOAD CASES ============
   useEffect(() => {
     async function loadCases() {
       try {
@@ -69,7 +166,7 @@ export default function LogAnalysisPage() {
     loadCases();
   }, []);
 
-  // ============ LOAD EVIDENCE FOR SELECTED CASE ============
+  // ============ LOAD EVIDENCE ============
   useEffect(() => {
     async function loadEvidence() {
       if (!selectedCaseId) return;
@@ -112,7 +209,6 @@ export default function LogAnalysisPage() {
   const currentCase = cases.find(c => c.id === selectedCaseId);
   const selectedEvidence = caseEvidence.find(e => e.id === selectedEvidenceId);
 
-  // ============ HANDLE CASE SELECTION ============
   const handleSelectCase = (caseId: string) => {
     setSelectedCaseId(caseId);
     setShowCaseModal(false);
@@ -122,9 +218,9 @@ export default function LogAnalysisPage() {
     setHasResult(false);
     setAnalysisResult(null);
     setEvidenceFileContent(null);
+    setIsFileValidated(false);
   };
 
-  // ============ HANDLE EVIDENCE SELECTION ============
   const handleSelectEvidence = (evidenceId: string) => {
     setSelectedEvidenceId(evidenceId);
     setShowEvidenceModal(false);
@@ -134,9 +230,9 @@ export default function LogAnalysisPage() {
     setAnalysisResult(null);
     setError(null);
     setEvidenceFileContent(null);
+    setIsFileValidated(false);
   };
 
-  // ============ HANDLE CREATE CASE ============
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -198,11 +294,15 @@ export default function LogAnalysisPage() {
     }
   };
 
-  // ============ HANDLE ADD EVIDENCE ============
   const handleAddEvidence = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile || !selectedCaseId) {
       setError("Please select a case and file first!");
+      return;
+    }
+
+    if (!isFileValidated) {
+      setError("File is not a valid log file. Please upload a valid log file.");
       return;
     }
 
@@ -269,6 +369,7 @@ export default function LogAnalysisPage() {
       setSelectedFile(null);
       setUploadProgress(100);
       setExtractedFromCase(true);
+      setIsFileValidated(false);
       
     } catch (err) {
       console.error("Error adding evidence:", err);
@@ -296,13 +397,57 @@ export default function LogAnalysisPage() {
     }
   };
 
+  // ============ HANDLE FILE SELECT WITH STRICT VALIDATION ============
   const handleFileSelect = (file: File) => {
-    setSelectedFile(file);
+    setError("");
+    setSelectedFile(null);
     setHasResult(false);
     setAnalysisResult(null);
-    setError(null);
-    setExtractedFromCase(false);
-    setEvidenceFileContent(null);
+    setIsFileValidated(false);
+    
+    if (!isValidLogFile(file)) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      
+      const validation = isValidLogContent(content);
+      
+      if (!validation.valid) {
+        setError(validation.message);
+        setSelectedFile(null);
+        setHasResult(false);
+        setAnalysisResult(null);
+        setEvidenceFileContent(null);
+        setIsFileValidated(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
+      
+      setError("");
+      setSelectedFile(file);
+      setHasResult(false);
+      setAnalysisResult(null);
+      setExtractedFromCase(false);
+      setEvidenceFileContent(content);
+      setIsFileValidated(true);
+    };
+    reader.onerror = () => {
+      setError("Failed to read file. Please try again.");
+      setSelectedFile(null);
+      setIsFileValidated(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,11 +457,17 @@ export default function LogAnalysisPage() {
   };
 
   const handleAnalyze = () => {
-    if (selectedFile) {
-      performAnalysis(selectedFile);
-    } else {
+    if (!selectedFile) {
       setError("Please upload a log file first!");
+      return;
     }
+    
+    if (!isFileValidated) {
+      setError("File validation failed. Please upload a valid log file.");
+      return;
+    }
+    
+    performAnalysis(selectedFile);
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -348,6 +499,11 @@ export default function LogAnalysisPage() {
     setHasResult(false);
     setAnalysisResult(null);
     setError(null);
+    setEvidenceFileContent(null);
+    setIsFileValidated(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const getRiskBadge = (level: string) => {
@@ -363,12 +519,12 @@ export default function LogAnalysisPage() {
   return (
     <div className="min-h-screen bg-[#0B1220]">
       
-      {/* ===== NAVBAR ===== */}
       <nav className="bg-[#0B1220]/90 backdrop-blur-md border-b border-[#1E293B] px-6 py-3 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <PremiumLogo size="md" variant="white" />
           <div className="flex items-center space-x-4">
             <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition-colors">Dashboard</Link>
+            <Link href="/email-analysis" className="text-sm text-gray-400 hover:text-white transition-colors">Email Analysis</Link>
             <Link href="/log-analysis" className="text-sm text-blue-400 hover:text-blue-300 transition-colors">Log Analysis</Link>
             <div className="flex items-center space-x-3 pl-4 border-l border-[#1E293B]">
               <div className="w-8 h-8 bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] rounded-full flex items-center justify-center">
@@ -383,12 +539,10 @@ export default function LogAnalysisPage() {
         </div>
       </nav>
 
-      {/* ===== MAIN CONTENT ===== */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Log Analysis</h1>
+            <h1 className="text-2xl font-bold text-white">📊 Log Analysis</h1>
             <p className="text-gray-400">AI-powered log file analysis for threat detection</p>
           </div>
           <button
@@ -402,7 +556,6 @@ export default function LogAnalysisPage() {
           </button>
         </div>
 
-        {/* ============ CASE SELECTOR ============ */}
         <div className="bg-[#1A2332] rounded-xl border border-[#1E293B] p-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center space-x-3">
@@ -432,7 +585,6 @@ export default function LogAnalysisPage() {
           </div>
         </div>
 
-        {/* ============ EVIDENCE SELECTOR ============ */}
         <div className="bg-[#1A2332] rounded-xl border border-[#1E293B] p-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center space-x-3">
@@ -465,7 +617,6 @@ export default function LogAnalysisPage() {
           )}
         </div>
 
-        {/* Upload Area */}
         <div className="bg-[#1A2332] rounded-xl border border-[#1E293B] p-6">
           <div
             className={`border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer ${
@@ -493,6 +644,11 @@ export default function LogAnalysisPage() {
               <div>
                 <p className="text-green-400 font-medium">{selectedFile.name}</p>
                 <p className="text-sm text-gray-500 mt-1">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                {isFileValidated ? (
+                  <p className="text-xs text-green-400 mt-1">✅ Valid log file</p>
+                ) : (
+                  <p className="text-xs text-yellow-400 mt-1">⏳ Validating...</p>
+                )}
                 <button 
                   onClick={handleRemoveFile}
                   className="mt-2 text-sm text-red-400 hover:text-red-300"
@@ -503,13 +659,14 @@ export default function LogAnalysisPage() {
             ) : (
               <>
                 <p className="text-gray-400">Upload log files for AI analysis</p>
-                <p className="text-sm text-gray-500 mt-2">Supports: .log, .txt, .csv</p>
+                <p className="text-sm text-gray-500 mt-2">Supports: <span className="text-yellow-400">.log</span>, <span className="text-yellow-400">.txt</span> (with log content), <span className="text-yellow-400">.csv</span> (with log data)</p>
+                <p className="text-xs text-red-400/70 mt-1">⚠️ Regular text files without log data will be rejected</p>
               </>
             )}
           </div>
 
           {error && (
-            <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm">
+            <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm whitespace-pre-wrap">
               ⚠️ {error}
             </div>
           )}
@@ -517,7 +674,7 @@ export default function LogAnalysisPage() {
           <div className="mt-4 flex justify-center">
             <button
               onClick={handleAnalyze}
-              disabled={isAnalyzing || !selectedFile}
+              disabled={isAnalyzing || !selectedFile || !isFileValidated}
               className="px-6 py-2 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white rounded-xl hover:shadow-lg hover:shadow-[#3B82F6]/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isAnalyzing ? "Analyzing..." : "Analyze Logs"}
@@ -531,7 +688,6 @@ export default function LogAnalysisPage() {
             </div>
           )}
 
-          {/* Results */}
           {hasResult && analysisResult && (
             <div className="mt-6">
               <div className="flex items-center justify-between mb-4">
@@ -560,12 +716,10 @@ export default function LogAnalysisPage() {
                 </div>
               </div>
 
-              {/* Summary */}
               <div className="p-4 bg-[#0B1220] rounded-lg border border-[#1E293B] mb-4">
                 <p className="text-sm text-gray-300">{analysisResult.summary}</p>
               </div>
 
-              {/* Key Findings */}
               {analysisResult.keyFindings && analysisResult.keyFindings.length > 0 && (
                 <div className="p-4 bg-[#0B1220] rounded-lg border border-[#1E293B] mb-4">
                   <h4 className="text-sm font-semibold text-white mb-2">🔍 Key Findings</h4>
@@ -577,7 +731,6 @@ export default function LogAnalysisPage() {
                 </div>
               )}
 
-              {/* Recommendations */}
               {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
                 <div className="p-4 bg-[#0B1220] rounded-lg border border-[#1E293B]">
                   <h4 className="text-sm font-semibold text-white mb-2">💡 Recommendations</h4>
@@ -593,7 +746,6 @@ export default function LogAnalysisPage() {
         </div>
       </div>
 
-      {/* ============ SELECT CASE MODAL ============ */}
       {showCaseModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -635,7 +787,6 @@ export default function LogAnalysisPage() {
         </div>
       )}
 
-      {/* ============ CREATE CASE MODAL ============ */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] w-full max-w-lg p-6">
@@ -718,7 +869,6 @@ export default function LogAnalysisPage() {
         </div>
       )}
 
-      {/* ============ SELECT EVIDENCE MODAL ============ */}
       {showEvidenceModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -775,7 +925,6 @@ export default function LogAnalysisPage() {
         </div>
       )}
 
-      {/* ============ ADD EVIDENCE MODAL ============ */}
       {showAddEvidenceModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] w-full max-w-lg p-6">
@@ -824,7 +973,7 @@ export default function LogAnalysisPage() {
               )}
 
               {error && (
-                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm whitespace-pre-wrap">
                   ⚠️ {error}
                 </div>
               )}
@@ -832,7 +981,7 @@ export default function LogAnalysisPage() {
               <div className="flex items-center space-x-3 pt-4 border-t border-[#1E293B]">
                 <button
                   onClick={handleAddEvidence}
-                  disabled={!selectedFile || !selectedCaseId || uploadingEvidence}
+                  disabled={!selectedFile || !selectedCaseId || uploadingEvidence || !isFileValidated}
                   className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white font-medium rounded-xl hover:shadow-lg hover:shadow-[#3B82F6]/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploadingEvidence ? "Adding Evidence..." : "Add Evidence"}
