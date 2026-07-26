@@ -16,7 +16,7 @@ TraceLens AI is an enterprise-grade Digital Forensics and Incident Response (DFI
 
 | Resource | Link |
 |---|---|
-| Live Application | [tracelens-7bs8163lx-sami-nova.vercel.app](https://tracelens-7bs8163lx-sami-nova.vercel.app) |
+| Live Application | [tracelens-7bs8163lx-sami-nova.vercel.app](https://tracelens-ai-one.vercel.app) |
 | Production URL (alias) | [tracelens-ai-one.vercel.app](https://tracelens-ai-one.vercel.app) |
 | GitHub Repository | [github.com/SAMINA-PARVEEN/tracelens-ai](https://github.com/SAMINA-PARVEEN/tracelens-ai) |
 | Developer | Samina Parveen (SamiNova) |
@@ -64,7 +64,7 @@ TraceLens AI is an enterprise-grade Digital Forensics and Incident Response (DFI
 
 | Service | URL |
 |---|---|
-| Live App | https://tracelens-7bs8163lx-sami-nova.vercel.app |
+| Live App | https://tracelens-ai-one.vercel.app |
 | Alias | https://tracelens-ai-one.vercel.app |
 | Source Code | https://github.com/SAMINA-PARVEEN/tracelens-ai |
 
@@ -661,7 +661,7 @@ Evidence Uploaded → Hash Generation → Metadata Extraction → Case Context C
 
 | Environment | URL |
 |---|---|
-| Production | https://tracelens-7bs8163lx-sami-nova.vercel.app |
+| Production | https://tracelens-ai-one.vercel.app |
 | Alias | https://tracelens-ai-one.vercel.app |
 | GitHub | https://github.com/SAMINA-PARVEEN/tracelens-ai |
 
@@ -763,7 +763,7 @@ vercel --prod
 | Environment | URL |
 |---|---|
 | Development | http://localhost:3000/api |
-| Production | https://tracelens-7bs8163lx-sami-nova.vercel.app/api |
+| Production | https://tracelens-ai-one.vercel.app/api |
 
 ### Authentication
 
@@ -1105,7 +1105,7 @@ TraceLens AI is distributed under the **MIT License**. See the `LICENSE` file fo
 | Developer | Samina Parveen |
 | GitHub | https://github.com/SAMINA-PARVEEN |
 | Project Repository | https://github.com/SAMINA-PARVEEN/tracelens-ai |
-| Live Application | https://tracelens-7bs8163lx-sami-nova.vercel.app |
+| Live Application | https://tracelens-ai-one.vercel.app |
 
 ---
 
