@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { extractMetadata, MetadataResult, getFileIcon, formatFileSize } from "../lib/metadataService";
 import PremiumLogo from "@/app/components/ui/PremiumLogo";
 import { supabase } from "../lib/supabase";
+import { Suspense } from 'react';
 
 export default function MetadataPage() {
   const searchParams = useSearchParams();
