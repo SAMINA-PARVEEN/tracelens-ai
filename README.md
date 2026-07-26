@@ -41,6 +41,7 @@ TraceLens AI is an enterprise-grade Digital Forensics and Incident Response (DFI
 - [Future Roadmap](#future-roadmap)
 - [Glossary](#glossary)
 - [References](#references)
+- [Application Screenshots](#application-screenshots)
 - [License](#license)
 - [Contact](#contact)
 
@@ -1031,6 +1032,63 @@ Functional testing · Integration testing · Security testing · Performance tes
 | Tailwind CSS | https://tailwindcss.com/docs |
 | Supabase | https://supabase.com/docs |
 | PostgreSQL | https://www.postgresql.org/docs |
+
+---
+
+## Application Screenshots
+
+The following screens illustrate the current TraceLens AI interface across its core investigation modules. All images live in the [`screenshots/`](./screenshots) folder of this repository.
+
+### Landing & Overview
+
+| Landing Page | Features Overview |
+|---|---|
+| ![Landing Hero](./screenshots/01-landing-hero.png) | ![Features Overview](./screenshots/02-features-overview.png) |
+
+| About & Stats | Dashboard Overview |
+|---|---|
+| ![About & Stats](./screenshots/03-about-stats.png) | ![Dashboard Overview](./screenshots/04-dashboard-overview.png) |
+
+### Case & Evidence Management
+
+| New Case | Evidence Upload |
+|---|---|
+| ![New Case](./screenshots/05-new-case.png) | ![Evidence Upload](./screenshots/06-evidence-upload.png) |
+
+| Add Evidence to Case | Metadata Page |
+|---|---|
+| ![Add Evidence to Case](./screenshots/07-add-evidence-to-case.png) | ![Metadata Page](./screenshots/08-metadata-page.png) |
+
+### AI Analysis Modules
+
+| Log Analysis | Email Analysis |
+|---|---|
+| ![Log Analysis](./screenshots/09-log-analysis.png) | ![Email Analysis](./screenshots/10-email-analysis.png) |
+
+| OSINT Analysis | Case Analysis View |
+|---|---|
+| ![OSINT Page](./screenshots/11-osint-page.png) | ![Case Analysis View](./screenshots/17-case-analysis-view.png) |
+
+![AI Analysis Results](./screenshots/18-ai-analysis-results.png)
+*Structured AI findings — threat level, confidence score, key findings, and recommendations.*
+
+### Timeline & Incident Response
+
+| Investigation Timeline | Timeline Detail |
+|---|---|
+| ![Investigation Timeline](./screenshots/12-investigation-timeline.png) | ![Timeline Detail](./screenshots/13-timeline-detail.png) |
+
+![Incident Response](./screenshots/14-incident-response.png)
+*Structured incident response workflow view.*
+
+### Reporting & Settings
+
+| Reports Page | Select Report Type |
+|---|---|
+| ![Reports Page](./screenshots/15-reports-page.png) | ![Select Report Type](./screenshots/19-select-report-type.png) |
+
+![Settings Page](./screenshots/16-settings-page.png)
+*Organisation and application settings.*
 
 ---
 
