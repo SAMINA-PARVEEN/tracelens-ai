@@ -2,6 +2,7 @@ import * as mammoth from 'mammoth';
 import * as exifr from 'exifr';
 import JSZip from 'jszip';
 
+
 export interface MetadataResult {
   fileName: string;
   fileSize: string;
@@ -99,8 +100,8 @@ export async function extractMetadata(file: File): Promise<MetadataResult> {
   // =============================================
   if (ext === 'pdf') {
     try {
-      const pdfParse = await import('pdf-parse');
-      const data = await pdfParse(Buffer.from(buffer));
+      const pdfParse = require('pdf-parse');
+const data = await pdfParse(Buffer.from(buffer));
       const info = data.info || {};
       const doc: any = {};
       if (info.Author) doc.author = info.Author;

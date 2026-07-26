@@ -810,7 +810,48 @@ export default function ReportsPage() {
         }
       })) || [];
 
-     
+     const mappedReports = reportsData.map((report: any) => ({
+  id: report.id,
+  caseId: report.caseId,
+  title: report.title,
+  type: report.type || 'investigation',
+  status: report.status || 'draft',
+  version: report.version || 1,
+  createdAt: report.createdAt || new Date().toISOString(),
+  generatedAt: report.generatedAt || new Date().toISOString(),
+  generatedBy: report.generatedBy || 'system',
+  // Content object
+  content: {
+    caseTitle: report.caseTitle || '',
+    caseNumber: report.caseNumber || '',
+    investigatingOfficer: report.investigatingOfficer || '',
+    department: report.department || '',
+    incidentDate: report.incidentDate || new Date().toISOString(),
+    incidentType: report.incidentType || '',
+    location: report.location || '',
+    summary: report.summary || '',
+    findings: report.findings || [],
+    evidence: report.evidence || [],
+    analysis: report.analysis || '',
+    conclusion: report.conclusion || '',
+    recommendations: report.recommendations || [],
+    executiveSummary: report.executiveSummary || '',
+    signature: report.signature || '',
+    dateReported: report.dateReported || new Date().toISOString(),
+    classification: report.classification || 'confidential',
+    distribution: report.distribution || [],
+    approvedBy: report.approvedBy || '',
+    reviewDate: report.reviewDate || new Date().toISOString(),
+    nextReviewDate: report.nextReviewDate || new Date().toISOString(),
+  },
+  // Organization
+  organization: report.organization || {
+    name: report.requestOrganization || 'Default Organization',
+    address: '',
+    phone: '',
+    email: '',
+  },
+}));
     } catch (err) {
       console.error('Error:', err);
       alert('Failed to create report. Please try again.');
