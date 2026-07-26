@@ -1017,7 +1017,7 @@ export default function ReportsPage() {
               {/* Cover with PremiumLogo */}
               <div className="text-center border-b border-gray-200 pb-6 mb-6">
                 <div className="flex justify-center mb-4">
-                  <PremiumLogo size="lg" variant="dark" />
+                  <PremiumLogo size="lg" variant="full" />
                 </div>
                 <div className="text-sm text-gray-500 font-medium tracking-wider uppercase mb-1">
                   AI-Powered Digital Investigation Platform
