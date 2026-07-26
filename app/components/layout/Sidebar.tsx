@@ -40,7 +40,7 @@ export default function Sidebar() {
       <div className="p-4">
         {/* ===== SIDEBAR LOGO - SMALL, NO TAGLINE ===== */}
         <div className="mb-6">
-          <SidebarLogo size="sm" />
+          <SidebarLogo />
         </div>
 
         {/* Navigation */}
