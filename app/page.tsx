@@ -14,8 +14,7 @@ export default function HomePage() {
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-sm text-gray-400 hover:text-white transition-colors">Features</a>
               <a href="#about" className="text-sm text-gray-400 hover:text-white transition-colors">About</a>
-              <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">Pricing</a>
-              <a href="#" className="text-sm text-gray-400 hover:text-white transition-colors">Contact</a>
+              <a href="#contact" className="text-sm text-gray-400 hover:text-white transition-colors">Contact</a>
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/login" className="hidden sm:inline-block text-sm text-gray-400 hover:text-white transition-colors">Sign In</Link>
@@ -184,6 +183,115 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Contact Section */}
+      <section id="contact" className="py-20 bg-[#0A0F1A]">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-14">
+            <div className="inline-flex items-center px-4 py-1.5 bg-[#3B82F6]/10 border border-[#3B82F6]/20 rounded-full mb-4">
+              <span className="text-xs font-medium text-[#3B82F6]">Contact</span>
+            </div>
+            <h2 className="text-3xl font-bold text-white">Get in Touch</h2>
+            <p className="mt-4 text-gray-400 max-w-2xl mx-auto">Have questions or need assistance? Reach out to our team</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Left: About the Developer */}
+            <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] p-8">
+              <h3 className="text-2xl font-bold text-white mb-6">About the Developer</h3>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xl font-semibold text-white">Samina Parveen</p>
+                  <p className="text-sm text-blue-400">Lead Digital Forensic Investigator | SamiNova</p>
+                </div>
+
+                <div className="space-y-3 text-sm text-gray-300 leading-relaxed">
+                  <p className="flex items-start gap-3">
+                    <span className="text-xl">🔍</span>
+                    <span><span className="text-white font-medium">Digital Forensics Expert</span> with 12+ years of experience in cybersecurity, incident response, and digital investigations.</span>
+                  </p>
+                  <p className="flex items-start gap-3">
+                    <span className="text-xl">🛡️</span>
+                    <span>Specializing in <span className="text-white">AI-powered forensic analysis</span>, evidence preservation, and court-admissible reporting.</span>
+                  </p>
+                  <p className="flex items-start gap-3">
+                    <span className="text-xl">📊</span>
+                    <span>Passionate about leveraging <span className="text-white">Artificial Intelligence</span> to streamline digital investigations and enhance forensic accuracy.</span>
+                  </p>
+                  <p className="flex items-start gap-3">
+                    <span className="text-xl">🎯</span>
+                    <span>Committed to <span className="text-white">cybersecurity education</span> and building tools that empower investigators worldwide.</span>
+                  </p>
+                </div>
+
+                <div className="pt-4">
+                  <p className="text-sm text-gray-400 font-medium mb-3">Certifications:</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 bg-[#0B1220] border border-[#1E293B] rounded-full text-xs text-blue-400">GCFA</span>
+                    <span className="px-3 py-1 bg-[#0B1220] border border-[#1E293B] rounded-full text-xs text-blue-400">GCFE</span>
+                    <span className="px-3 py-1 bg-[#0B1220] border border-[#1E293B] rounded-full text-xs text-blue-400">CCFE</span>
+                    <span className="px-3 py-1 bg-[#0B1220] border border-[#1E293B] rounded-full text-xs text-blue-400">CEH</span>
+                    <span className="px-3 py-1 bg-[#0B1220] border border-[#1E293B] rounded-full text-xs text-blue-400">CISSP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Contact Information */}
+            <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] p-8">
+              <h3 className="text-2xl font-bold text-white mb-6">Contact Information</h3>
+              <div className="space-y-6">
+                <div className="flex items-start gap-4 p-4 bg-[#0B1220] rounded-xl border border-[#1E293B]">
+                  <span className="text-2xl">👤</span>
+                  <div>
+                    <p className="text-sm text-gray-400">Name</p>
+                    <p className="text-white font-medium">Samina Parveen</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-[#0B1220] rounded-xl border border-[#1E293B]">
+                  <span className="text-2xl">🏢</span>
+                  <div>
+                    <p className="text-sm text-gray-400">Organization</p>
+                    <p className="text-white font-medium">SamiNova</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-[#0B1220] rounded-xl border border-[#1E293B]">
+                  <span className="text-2xl">📞</span>
+                  <div>
+                    <p className="text-sm text-gray-400">Phone</p>
+                    <p className="text-white font-medium">+92 327 9686623</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-[#0B1220] rounded-xl border border-[#1E293B]">
+                  <span className="text-2xl">✉️</span>
+                  <div>
+                    <p className="text-sm text-gray-400">Email</p>
+                    <p className="text-white font-medium">samina.perveen.172@gmail.com</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-[#0B1220] rounded-xl border border-[#1E293B]">
+                  <span className="text-2xl">🔗</span>
+                  <div>
+                    <p className="text-sm text-gray-400">LinkedIn</p>
+                    <a 
+                      href="https://www.linkedin.com/in/samina-parveen" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                    >
+                      linkedin.com/in/samina-parveen
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="bg-[#0A0F1A] border-t border-[#1E293B] py-8">
         <div className="max-w-7xl mx-auto px-4">
@@ -192,7 +300,7 @@ export default function HomePage() {
             <div className="flex items-center space-x-6 mt-4 md:mt-0">
               <a href="#" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">Privacy</a>
               <a href="#" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">Terms</a>
-              <a href="#" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">Support</a>
+              <a href="#contact" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">Contact</a>
               <span className="text-sm text-gray-600">© 2026 SamiNova</span>
             </div>
           </div>
