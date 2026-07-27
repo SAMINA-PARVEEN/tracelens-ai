@@ -1116,3 +1116,4 @@ TraceLens AI is a fully functional Digital Forensics and Incident Response platf
 The platform is live and operational, ready for real-world digital forensic investigations.
 
 © 2026 SamiNova — TraceLens AI
+
