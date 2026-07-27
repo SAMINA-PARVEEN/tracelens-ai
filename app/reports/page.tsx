@@ -495,6 +495,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState<any[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   // ============ LOAD REAL CASES FROM SUPABASE ============
   useEffect(() => {
@@ -526,19 +527,20 @@ export default function ReportsPage() {
   // ============ LOAD REPORTS FROM SUPABASE ============
   useEffect(() => {
     async function loadReports() {
+      if (!selectedCaseId) {
+        setReports([]);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        
-        let query = supabase
+
+        const { data, error } = await supabase
           .from('reports')
           .select('*')
+          .eq('case_id', selectedCaseId)
           .order('created_at', { ascending: false });
-
-        if (selectedCaseId) {
-          query = query.eq('case_id', selectedCaseId);
-        }
-
-        const { data, error } = await query;
 
         if (error) {
           console.error('Error loading reports:', error);
@@ -547,57 +549,17 @@ export default function ReportsPage() {
           return;
         }
 
-        // If no reports exist, add demo report
         if (!data || data.length === 0) {
-          if (selectedCaseId) {
-            // Get the case_id string for the selected case
-            const { data: caseData } = await supabase
-              .from('cases')
-              .select('case_id')
-              .eq('id', selectedCaseId)
-              .single();
-            
-            if (caseData && caseData.case_id === 'CASE-2026-001') {
-              // Insert demo report using your actual table columns
-              const demoReportData = {
-                organization_id: '00000000-0000-0000-0000-000000000001',
-                case_id: selectedCaseId,
-                created_by: '11111111-1111-1111-1111-111111111111',
-                report_number: 'RPT-2026-001',
-                report_title: 'Digital Forensic Investigation Report - APT Attack',
-                report_type: 'Court Report',
-                version: '2.1',
-                status: 'Final',
-                confidentiality: 'Confidential',
-                summary: demoReport.content.executiveSummary,
-                findings: demoReport.content.metadataAnalysis.findings,
-                recommendations: demoReport.content.recommendations,
-                evidence_count: demoReport.content.evidenceSummary.total,
-                created_at: new Date().toISOString(),
-                generated_at: new Date().toISOString(),
-              };
-              
-              await supabase.from('reports').insert([demoReportData]);
-            }
-          }
-          
-          // Reload reports
-          const { data: reloadedReports } = await supabase
-            .from('reports')
-            .select('*')
-            .eq('case_id', selectedCaseId)
-            .order('created_at', { ascending: false });
-          
-          setReports(reloadedReports || []);
+          setReports([]);
           setLoading(false);
           return;
         }
 
         // Map database columns to Report interface
-        const mappedReports = data?.map((item: any) => ({
+        const mappedReports = data.map((item: any) => ({
           id: item.id,
           caseId: item.case_id,
-          title: item.report_title || item.title,
+          title: item.report_title || 'Untitled Report',
           type: item.report_type || 'Court Report',
           status: item.status || 'Draft',
           version: item.version || '1.0',
@@ -686,8 +648,8 @@ export default function ReportsPage() {
             caseType: 'Cyber Attack',
             createdDate: new Date().toISOString().split('T')[0],
             executiveSummary: item.summary || '',
-            evidenceSummary: { total: item.evidence_count || 0, items: [] },
-            metadataAnalysis: { filesAnalyzed: 0, findings: item.findings || [], summary: '' },
+            evidenceSummary: { total: 0, items: [] },
+            metadataAnalysis: { filesAnalyzed: 0, findings: [], summary: '' },
             timeline: [],
             logAnalysis: { totalLines: 0, suspicious: 0, threats: 0, summary: '', findings: [] },
             emailAnalysis: { totalAnalyzed: 0, suspicious: 0, riskLevel: '', findings: [], summary: '' },
@@ -698,7 +660,7 @@ export default function ReportsPage() {
             recommendations: item.recommendations || [],
             conclusion: ''
           }
-        })) || [];
+        }));
 
         setReports(mappedReports);
       } catch (err) {
@@ -716,59 +678,104 @@ export default function ReportsPage() {
 
   // ============ HANDLE CREATE REPORT ============
   const handleCreateReport = async () => {
+    if (!selectedCaseId) {
+      alert('Please select a case first.');
+      return;
+    }
+
+    setCreating(true);
+
     try {
-      const { data: profileData } = await supabase
+      // Get current user profile
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .limit(1);
 
-      const profile = profileData?.[0];
-      if (!profile) {
+      if (profileError) {
+        console.error('Profile error:', profileError);
+        alert('Error fetching profile: ' + profileError.message);
+        setCreating(false);
+        return;
+      }
+
+      const profileId = profileData?.[0]?.id;
+      if (!profileId) {
         alert('No profile found. Please make sure you are logged in.');
+        setCreating(false);
         return;
       }
 
       // Get organization
-      const { data: orgData } = await supabase
+      const { data: orgData, error: orgError } = await supabase
         .from('organizations')
         .select('id')
         .limit(1);
-      
+
+      if (orgError) {
+        console.error('Organization error:', orgError);
+      }
+
       const orgId = orgData?.[0]?.id || null;
 
-      // Get the case_id string for display
-      const { data: caseData } = await supabase
+      // Generate report number
+      const reportNumber = `RPT-${Date.now().toString().slice(-6)}`;
+
+      // Check if case exists and get its UUID
+      const { data: caseData, error: caseError } = await supabase
         .from('cases')
-        .select('case_id')
+        .select('id')
         .eq('id', selectedCaseId)
         .single();
 
+      if (caseError) {
+        console.error('Case error:', caseError);
+        alert('Error finding case: ' + caseError.message);
+        setCreating(false);
+        return;
+      }
+
+      if (!caseData) {
+        alert('Case not found. Please select a valid case.');
+        setCreating(false);
+        return;
+      }
+
+      // Insert report with CORRECT column names
+      const insertData = {
+        organization_id: orgId,
+        case_id: caseData.id,
+        created_by: profileId,
+        report_number: reportNumber,
+        report_title: `Investigation Report - ${new Date().toLocaleDateString()}`,
+        report_type: 'Court Report',
+        version: '1.0',
+        status: 'Draft',
+        confidentiality: 'Confidential',
+        summary: 'New investigation report',
+        findings: [],
+        recommendations: [],
+        evidence_count: 0,
+        created_at: new Date().toISOString(),
+        generated_at: new Date().toISOString(),
+      };
+
+      console.log('Inserting report with data:', JSON.stringify(insertData, null, 2));
+
       const { data, error } = await supabase
         .from('reports')
-        .insert([{
-          organization_id: orgId,
-          case_id: selectedCaseId,
-          created_by: profile.id,
-          report_number: `RPT-${Date.now().toString().slice(-6)}`,
-          report_title: `Investigation Report - ${new Date().toLocaleDateString()}`,
-          report_type: 'Court Report',
-          version: '1.0',
-          status: 'Draft',
-          confidentiality: 'Confidential',
-          evidence_count: 0,
-          summary: 'New investigation report',
-          findings: {},
-          recommendations: {},
-          created_at: new Date().toISOString(),
-          generated_at: new Date().toISOString(),
-        }])
+        .insert([insertData])
         .select();
 
       if (error) {
-        console.error('Error creating report:', error);
-        alert('Failed to create report. Please try again.');
+        console.error('Supabase insert error:', error);
+        alert('Failed to create report. Error: ' + error.message);
+        setCreating(false);
         return;
       }
+
+      console.log('Insert successful:', data);
+      alert('✅ Report created successfully!');
 
       // Reload reports
       const { data: updatedReports } = await supabase
@@ -777,43 +784,120 @@ export default function ReportsPage() {
         .eq('case_id', selectedCaseId)
         .order('created_at', { ascending: false });
 
-      const mappedReports = updatedReports?.map((item: any) => ({
-        id: item.id,
-        caseId: item.case_id,
-        title: item.report_title || item.title,
-        type: item.report_type || 'Court Report',
-        status: item.status || 'Draft',
-        version: item.version || '1.0',
-        createdAt: item.created_at,
-        generatedAt: item.generated_at || item.created_at,
-        generatedBy: item.created_by || 'System',
-        organization: defaultOrganization,
-        content: {
-          caseTitle: 'New Investigation',
-          caseDescription: '',
-          caseStatus: 'Open',
-          casePriority: 'High',
-          caseType: 'Cyber Attack',
-          createdDate: new Date().toISOString().split('T')[0],
-          executiveSummary: item.summary || '',
-          evidenceSummary: { total: 0, items: [] },
-          metadataAnalysis: { filesAnalyzed: 0, findings: [], summary: '' },
-          timeline: [],
-          logAnalysis: { totalLines: 0, suspicious: 0, threats: 0, summary: '', findings: [] },
-          emailAnalysis: { totalAnalyzed: 0, suspicious: 0, riskLevel: '', findings: [], summary: '' },
-          osintFindings: { searchesPerformed: 0, findings: [], summary: '' },
-          incidentResponse: { planApplied: '', containment: [], eradication: [], recovery: [], lessonsLearned: [], status: '' },
-          forensicScore: { score: 0, level: '', factors: [] },
-          riskAssessment: { level: '', score: 0, factors: [] },
-          recommendations: [],
-          conclusion: ''
-        }
-      })) || [];
+      if (updatedReports) {
+        const mappedReports = updatedReports.map((item: any) => ({
+          id: item.id,
+          caseId: item.case_id,
+          title: item.report_title || 'Untitled Report',
+          type: item.report_type || 'Court Report',
+          status: item.status || 'Draft',
+          version: item.version || '1.0',
+          createdAt: item.created_at,
+          generatedAt: item.generated_at || item.created_at,
+          generatedBy: item.created_by || 'System',
+          organization: defaultOrganization,
+          legalAuthority: {
+            type: 'Court Order',
+            referenceNumber: 'CO-2026-001',
+            issuingAuthority: 'Special Court (Cyber Crimes), Islamabad',
+            dateIssued: new Date().toISOString().split('T')[0],
+            validUntil: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+            authorizedOfficer: 'Honorable Justice Muhammad Aslam',
+            jurisdiction: 'Islamabad Capital Territory, Pakistan'
+          },
+          requestedBy: 'National Cyber Security Agency (NCSA)',
+          requestOrganization: 'Government of Pakistan - Cyber Security Division',
+          requestDate: new Date().toISOString().split('T')[0],
+          requestReason: 'Suspected cyber attack targeting government infrastructure',
+          requestObjectives: ['Identify attack source', 'Preserve evidence', 'Provide expert report'],
+          investigator: {
+            name: 'Samina Parveen',
+            designation: 'Lead Digital Forensic Investigator',
+            experience: '12+ years in Digital Forensics & Incident Response',
+            certification: 'GCFA, GCFE, CCFE, CEH, CISSP',
+            organization: 'SamiNova Cybersecurity, Digital Forensics Division'
+          },
+          evidenceCollection: {
+            collector: 'Samina Parveen',
+            witness: 'Ahmed Khan',
+            collectionMethod: 'Bit-by-bit forensic image acquisition',
+            permission: 'Court Order and Client Authorization',
+            location: 'National Data Center, Islamabad',
+            date: new Date().toISOString().split('T')[0],
+            time: '08:30 - 17:00',
+            deviceDetails: 'Multiple systems: 3x Dell PowerEdge R740 Servers, 2x HPE ProLiant DL380 Servers'
+          },
+          methodology: [
+            'Evidence was acquired using accepted forensic procedures',
+            'SHA-256 cryptographic hashes were generated for all evidence',
+            'Write-blockers were used for all hard drive acquisitions',
+            'Metadata was extracted using forensic tools',
+            'AI-assisted log analysis was performed',
+            'Timeline was reconstructed from available evidence',
+            'All findings were reviewed by the investigative team'
+          ],
+          standards: [
+            'ISO/IEC 27037',
+            'ISO/IEC 27042',
+            'ISO/IEC 27043',
+            'NIST SP 800-86',
+            'SWGDE Best Practices',
+            'ISO/IEC 17025'
+          ],
+          evidenceStored: 'Secure Forensic Evidence Locker',
+          storageLocation: 'SamiNova DFIR Laboratory, Islamabad',
+          evidenceLocker: 'Evidence Locker #A-12',
+          cloudStorage: 'Encrypted Cloud Backup (AES-256-GCM)',
+          encryption: 'AES-256-XTS Full Disk Encryption',
+          hashVerified: true,
+          backupAvailable: true,
+          chainOfCustody: [],
+          expertOpinion: item.summary || '',
+          limitations: [],
+          legalDeclaration: 'I certify that the examination documented in this report was conducted using accepted digital forensic methodologies.',
+          aiDisclosure: {
+            used: true,
+            modules: ['Metadata extraction', 'Log analysis', 'Timeline generation', 'Threat classification'],
+            reviewedByInvestigator: true,
+            confidence: 'Very High'
+          },
+          signatures: {
+            leadInvestigator: 'Samina Parveen',
+            leadDate: new Date().toISOString().split('T')[0],
+            reviewer: '',
+            reviewDate: '',
+            laboratoryManager: '',
+            labManagerDate: ''
+          },
+          content: {
+            caseTitle: item.summary ? 'Investigation Report' : 'New Investigation',
+            caseDescription: '',
+            caseStatus: 'Open',
+            casePriority: 'High',
+            caseType: 'Cyber Attack',
+            createdDate: new Date().toISOString().split('T')[0],
+            executiveSummary: item.summary || '',
+            evidenceSummary: { total: 0, items: [] },
+            metadataAnalysis: { filesAnalyzed: 0, findings: [], summary: '' },
+            timeline: [],
+            logAnalysis: { totalLines: 0, suspicious: 0, threats: 0, summary: '', findings: [] },
+            emailAnalysis: { totalAnalyzed: 0, suspicious: 0, riskLevel: '', findings: [], summary: '' },
+            osintFindings: { searchesPerformed: 0, findings: [], summary: '' },
+            incidentResponse: { planApplied: '', containment: [], eradication: [], recovery: [], lessonsLearned: [], status: '' },
+            forensicScore: { score: 0, level: '', factors: [] },
+            riskAssessment: { level: '', score: 0, factors: [] },
+            recommendations: item.recommendations || [],
+            conclusion: ''
+          }
+        }));
+        setReports(mappedReports);
+      }
 
-     
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error:', err);
-      alert('Failed to create report. Please try again.');
+      alert('Failed to create report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -830,7 +914,8 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${report.title.replace(/\s+/g, '_')}.html`;
+    const fileName = (report.title || 'report').replace(/\s+/g, '_');
+    a.download = fileName + '.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -886,9 +971,17 @@ export default function ReportsPage() {
           </div>
           <button
             onClick={handleCreateReport}
-            className="px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-sm font-medium hover:bg-[#2563EB] transition"
+            disabled={creating}
+            className="px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-sm font-medium hover:bg-[#2563EB] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            + New Report
+            {creating ? (
+              <>
+                <span className="animate-spin">⟳</span>
+                Creating...
+              </>
+            ) : (
+              '+ New Report'
+            )}
           </button>
         </div>
 
@@ -921,9 +1014,10 @@ export default function ReportsPage() {
               <p className="text-gray-400">No reports found for this case</p>
               <button
                 onClick={handleCreateReport}
-                className="mt-4 px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-sm font-medium hover:bg-[#2563EB] transition"
+                disabled={creating}
+                className="mt-4 px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-sm font-medium hover:bg-[#2563EB] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create First Report
+                {creating ? 'Creating...' : 'Create First Report'}
               </button>
             </div>
           ) : (
@@ -1011,409 +1105,239 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Report Preview */}
             <div className="bg-white rounded-xl p-8 text-gray-900 max-h-[70vh] overflow-y-auto">
               
-              {/* Cover with PremiumLogo */}
-              <div className="text-center border-b border-gray-200 pb-6 mb-6">
-                <div className="flex justify-center mb-4">
-                  <PremiumLogo size="lg" variant="full" />
-                </div>
-                <div className="text-sm text-gray-500 font-medium tracking-wider uppercase mb-1">
-                  AI-Powered Digital Investigation Platform
-                </div>
-                <div className="text-lg font-semibold text-gray-800">{selectedReport.organization.department}</div>
-                <div className="text-sm text-gray-500">{selectedReport.organization.address}</div>
-                <div className="text-sm text-gray-500">{selectedReport.organization.contact}</div>
-                <div className="text-xs text-gray-400 mt-1">{selectedReport.organization.accreditation}</div>
-                <div className="text-2xl font-bold text-gray-900 mt-4">{selectedReport.title}</div>
-                <div className="text-sm text-gray-500 mt-1">Report ID: {selectedReport.id} | Version: {selectedReport.version}</div>
+              {/* Cover */}
+              <div className="text-center border-b-2 border-gray-300 pb-6 mb-6">
+                <div className="text-3xl font-bold text-gray-800 mb-2">🔍 TraceLens AI</div>
+                <div className="text-sm text-gray-500 font-medium tracking-wider uppercase mb-4">AI-Powered Digital Investigation Platform</div>
+                <div className="text-xl font-semibold text-gray-800">{selectedReport.organization?.department || 'Digital Forensics Division'}</div>
+                <div className="text-sm text-gray-500">{selectedReport.organization?.address || 'Islamabad, Pakistan'}</div>
+                <div className="text-sm text-gray-500">{selectedReport.organization?.contact || 'forensics@saminova.com'}</div>
+                <div className="text-xs text-gray-400 mt-1">{selectedReport.organization?.accreditation || 'ISO/IEC 17025 Accredited'}</div>
+                <div className="text-2xl font-bold text-gray-900 mt-6">{selectedReport.title}</div>
+                <div className="text-sm text-gray-500 mt-2">Report ID: {selectedReport.id} | Version: {selectedReport.version}</div>
                 <div className="text-sm text-gray-500">Generated: {formatDate(selectedReport.generatedAt)}</div>
-                <div className="inline-block mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">{selectedReport.status}</div>
+                <div className="inline-block mt-3 px-4 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">{selectedReport.status}</div>
               </div>
 
-              {/* Part A: Organization */}
+              {/* 1. Case Information */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">A. Organization Information</h3>
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">1. Case Information</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-gray-500">Organization:</span> {selectedReport.organization.name}</div>
-                  <div><span className="text-gray-500">Department:</span> {selectedReport.organization.department}</div>
-                  <div><span className="text-gray-500">Address:</span> {selectedReport.organization.address}</div>
-                  <div><span className="text-gray-500">Contact:</span> {selectedReport.organization.contact}</div>
-                  <div><span className="text-gray-500">Registration:</span> {selectedReport.organization.registrationNumber}</div>
-                  <div><span className="text-gray-500">Accreditation:</span> {selectedReport.organization.accreditation}</div>
-                  <div><span className="text-gray-500">Laboratory:</span> {selectedReport.organization.laboratoryName}</div>
-                  <div><span className="text-gray-500">Template Version:</span> {selectedReport.organization.templateVersion}</div>
+                  <div><span className="text-gray-500">Case ID:</span> {selectedReport.caseId || 'N/A'}</div>
+                  <div><span className="text-gray-500">Case Title:</span> {selectedReport.content?.caseTitle || 'N/A'}</div>
+                  <div><span className="text-gray-500">Case Status:</span> {selectedReport.content?.caseStatus || 'Open'}</div>
+                  <div><span className="text-gray-500">Priority:</span> {selectedReport.content?.casePriority || 'Medium'}</div>
+                  <div><span className="text-gray-500">Case Type:</span> {selectedReport.content?.caseType || 'Cyber Attack'}</div>
+                  <div><span className="text-gray-500">Created:</span> {formatDate(selectedReport.content?.createdDate || selectedReport.createdAt)}</div>
                 </div>
               </div>
 
-              {/* Part B: Legal Authority */}
+              {/* 2. Organization Information */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">B. Legal Authority</h3>
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">2. Organization Information</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-gray-500">Type:</span> {selectedReport.legalAuthority.type}</div>
-                  <div><span className="text-gray-500">Reference:</span> {selectedReport.legalAuthority.referenceNumber}</div>
-                  <div><span className="text-gray-500">Issuing Authority:</span> {selectedReport.legalAuthority.issuingAuthority}</div>
-                  <div><span className="text-gray-500">Date Issued:</span> {selectedReport.legalAuthority.dateIssued}</div>
-                  <div><span className="text-gray-500">Valid Until:</span> {selectedReport.legalAuthority.validUntil}</div>
-                  <div><span className="text-gray-500">Jurisdiction:</span> {selectedReport.legalAuthority.jurisdiction}</div>
-                  <div className="col-span-2"><span className="text-gray-500">Authorized Officer:</span> {selectedReport.legalAuthority.authorizedOfficer}</div>
+                  <div><span className="text-gray-500">Organization:</span> {selectedReport.organization?.name || 'SamiNova Cybersecurity'}</div>
+                  <div><span className="text-gray-500">Department:</span> {selectedReport.organization?.department || 'Digital Forensics Division'}</div>
+                  <div><span className="text-gray-500">Address:</span> {selectedReport.organization?.address || 'Islamabad, Pakistan'}</div>
+                  <div><span className="text-gray-500">Contact:</span> {selectedReport.organization?.contact || 'N/A'}</div>
+                  <div><span className="text-gray-500">Registration:</span> {selectedReport.organization?.registrationNumber || 'N/A'}</div>
+                  <div><span className="text-gray-500">Accreditation:</span> {selectedReport.organization?.accreditation || 'ISO/IEC 17025'}</div>
                 </div>
               </div>
 
-              {/* Part C: Investigation Request */}
+              {/* 3. Legal Authority */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">C. Investigation Request</h3>
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">3. Legal Authority</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="text-gray-500">Type:</span> {selectedReport.legalAuthority?.type || 'Court Order'}</div>
+                  <div><span className="text-gray-500">Reference:</span> {selectedReport.legalAuthority?.referenceNumber || 'N/A'}</div>
+                  <div><span className="text-gray-500">Issuing Authority:</span> {selectedReport.legalAuthority?.issuingAuthority || 'Special Court (Cyber Crimes)'}</div>
+                  <div><span className="text-gray-500">Date Issued:</span> {selectedReport.legalAuthority?.dateIssued || 'N/A'}</div>
+                  <div><span className="text-gray-500">Valid Until:</span> {selectedReport.legalAuthority?.validUntil || 'N/A'}</div>
+                  <div><span className="text-gray-500">Jurisdiction:</span> {selectedReport.legalAuthority?.jurisdiction || 'Islamabad Capital Territory'}</div>
+                </div>
+              </div>
+
+              {/* 4. Investigation Request */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">4. Investigation Request</h3>
                 <div className="text-sm space-y-1">
-                  <div><span className="text-gray-500">Requested By:</span> {selectedReport.requestedBy}</div>
-                  <div><span className="text-gray-500">Organization:</span> {selectedReport.requestOrganization}</div>
-                  <div><span className="text-gray-500">Request Date:</span> {selectedReport.requestDate}</div>
-                  <div><span className="text-gray-500">Reason:</span> {selectedReport.requestReason}</div>
-                  <div><span className="text-gray-500">Objectives:</span></div>
-                  <ul className="list-disc list-inside pl-4">
-                    {selectedReport.requestObjectives.map((obj, i) => (
-                      <li key={i}>{obj}</li>
-                    ))}
-                  </ul>
+                  <div><span className="text-gray-500">Requested By:</span> {selectedReport.requestedBy || 'N/A'}</div>
+                  <div><span className="text-gray-500">Organization:</span> {selectedReport.requestOrganization || 'N/A'}</div>
+                  <div><span className="text-gray-500">Request Date:</span> {selectedReport.requestDate || 'N/A'}</div>
+                  <div><span className="text-gray-500">Reason:</span> {selectedReport.requestReason || 'N/A'}</div>
                 </div>
               </div>
 
-              {/* Part D: Investigator */}
+              {/* 5. Investigator */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">D. Investigator Declaration</h3>
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">5. Investigator</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-gray-500">Name:</span> {selectedReport.investigator.name}</div>
-                  <div><span className="text-gray-500">Designation:</span> {selectedReport.investigator.designation}</div>
-                  <div><span className="text-gray-500">Experience:</span> {selectedReport.investigator.experience}</div>
-                  <div><span className="text-gray-500">Certification:</span> {selectedReport.investigator.certification}</div>
-                  <div className="col-span-2"><span className="text-gray-500">Organization:</span> {selectedReport.investigator.organization}</div>
+                  <div><span className="text-gray-500">Name:</span> {selectedReport.investigator?.name || 'Samina Parveen'}</div>
+                  <div><span className="text-gray-500">Designation:</span> {selectedReport.investigator?.designation || 'Lead Digital Forensic Investigator'}</div>
+                  <div><span className="text-gray-500">Experience:</span> {selectedReport.investigator?.experience || 'N/A'}</div>
+                  <div><span className="text-gray-500">Certification:</span> {selectedReport.investigator?.certification || 'N/A'}</div>
+                  <div className="col-span-2"><span className="text-gray-500">Organization:</span> {selectedReport.investigator?.organization || 'SamiNova Cybersecurity'}</div>
                 </div>
               </div>
 
-              {/* Part E: Evidence Collection */}
+              {/* 6. Evidence Collection */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">E. Evidence Collection Authorization</h3>
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">6. Evidence Collection</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-gray-500">Collector:</span> {selectedReport.evidenceCollection.collector}</div>
-                  <div><span className="text-gray-500">Witness:</span> {selectedReport.evidenceCollection.witness}</div>
-                  <div><span className="text-gray-500">Method:</span> {selectedReport.evidenceCollection.collectionMethod}</div>
-                  <div><span className="text-gray-500">Permission:</span> {selectedReport.evidenceCollection.permission}</div>
-                  <div><span className="text-gray-500">Location:</span> {selectedReport.evidenceCollection.location}</div>
-                  <div><span className="text-gray-500">Date:</span> {selectedReport.evidenceCollection.date}</div>
-                  <div><span className="text-gray-500">Time:</span> {selectedReport.evidenceCollection.time}</div>
-                  <div className="col-span-2"><span className="text-gray-500">Device Details:</span> {selectedReport.evidenceCollection.deviceDetails}</div>
+                  <div><span className="text-gray-500">Collector:</span> {selectedReport.evidenceCollection?.collector || 'N/A'}</div>
+                  <div><span className="text-gray-500">Witness:</span> {selectedReport.evidenceCollection?.witness || 'N/A'}</div>
+                  <div><span className="text-gray-500">Method:</span> {selectedReport.evidenceCollection?.collectionMethod || 'N/A'}</div>
+                  <div><span className="text-gray-500">Permission:</span> {selectedReport.evidenceCollection?.permission || 'N/A'}</div>
+                  <div><span className="text-gray-500">Location:</span> {selectedReport.evidenceCollection?.location || 'N/A'}</div>
+                  <div><span className="text-gray-500">Date:</span> {selectedReport.evidenceCollection?.date || 'N/A'}</div>
+                  <div><span className="text-gray-500">Time:</span> {selectedReport.evidenceCollection?.time || 'N/A'}</div>
+                  <div className="col-span-2"><span className="text-gray-500">Device:</span> {selectedReport.evidenceCollection?.deviceDetails || 'N/A'}</div>
                 </div>
               </div>
 
-              {/* Part F: Methodology */}
+              {/* 7. Methodology */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">F. Methodology</h3>
-                <ul className="list-disc list-inside text-sm space-y-1 pl-4">
-                  {selectedReport.methodology.map((m, i) => (
-                    <li key={i}>{m}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Part G: Standards */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">G. Standards Followed</h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedReport.standards.map((s, i) => (
-                    <span key={i} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">✓ {s}</span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Part H: Evidence Preservation */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">H. Evidence Preservation</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-gray-500">Storage:</span> {selectedReport.evidenceStored}</div>
-                  <div><span className="text-gray-500">Location:</span> {selectedReport.storageLocation}</div>
-                  <div><span className="text-gray-500">Locker:</span> {selectedReport.evidenceLocker}</div>
-                  <div><span className="text-gray-500">Cloud:</span> {selectedReport.cloudStorage}</div>
-                  <div><span className="text-gray-500">Encryption:</span> {selectedReport.encryption}</div>
-                  <div><span className="text-gray-500">Hash Verified:</span> {selectedReport.hashVerified ? '✅ Yes' : '❌ No'}</div>
-                  <div><span className="text-gray-500">Backup:</span> {selectedReport.backupAvailable ? '✅ Available' : '❌ Not Available'}</div>
-                </div>
-              </div>
-
-              {/* Part I: Chain of Custody */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">I. Chain of Custody</h3>
-                <div className="space-y-2">
-                  {selectedReport.chainOfCustody.map((coc, i) => (
-                    <div key={i} className="flex items-center gap-4 text-sm p-2 bg-gray-50 rounded">
-                      <span className="font-medium">{coc.from}</span>
-                      <span>→</span>
-                      <span>{coc.to}</span>
-                      <span className="text-gray-500">{coc.date} {coc.time}</span>
-                      <span className="text-gray-400 text-xs">{coc.reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Part J: Executive Summary */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">J. Executive Summary</h3>
-                <div className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg">
-                  {selectedReport.content.executiveSummary}
-                </div>
-              </div>
-
-              {/* Part K: Expert Opinion */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">K. Expert Opinion</h3>
-                <div className="p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                  <p className="text-sm text-gray-700">{selectedReport.expertOpinion}</p>
-                </div>
-              </div>
-
-              {/* Part L: Limitations */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">L. Limitations</h3>
-                <ul className="list-disc list-inside text-sm space-y-1 pl-4">
-                  {selectedReport.limitations.map((l, i) => (
-                    <li key={i} className="text-red-600">{l}</li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Part M: Legal Declaration */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">M. Legal Declaration</h3>
-                <div className="p-4 bg-gray-50 rounded-lg border-l-4 border-gray-500">
-                  <p className="text-sm text-gray-700">{selectedReport.legalDeclaration}</p>
-                  <p className="text-sm text-gray-500 mt-2">Signed by: {selectedReport.investigator.name}</p>
-                </div>
-              </div>
-
-              {/* Part N: AI Disclosure */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">N. AI Disclosure</h3>
-                <div className="p-4 bg-purple-50 rounded-lg border-l-4 border-purple-500">
-                  <p className="text-sm text-gray-700 font-medium">AI was used to assist in:</p>
-                  <ul className="list-disc list-inside text-sm pl-4 mt-1">
-                    {selectedReport.aiDisclosure.modules.map((m, i) => (
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">7. Methodology</h3>
+                {selectedReport.methodology && selectedReport.methodology.length > 0 ? (
+                  <ul className="list-disc list-inside text-sm space-y-1 pl-4">
+                    {selectedReport.methodology.map((m, i) => (
                       <li key={i}>{m}</li>
                     ))}
                   </ul>
-                  <p className="text-sm text-gray-700 mt-2">✅ Reviewed by investigator: {selectedReport.aiDisclosure.reviewedByInvestigator ? 'Yes' : 'No'}</p>
-                  <p className="text-sm text-gray-700">Confidence: {selectedReport.aiDisclosure.confidence}</p>
+                ) : (
+                  <p className="text-sm text-gray-500">No methodology documented.</p>
+                )}
+              </div>
+
+              {/* 8. Standards Followed */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">8. Standards Followed</h3>
+                {selectedReport.standards && selectedReport.standards.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedReport.standards.map((s, i) => (
+                      <span key={i} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">✓ {s}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No standards documented.</p>
+                )}
+              </div>
+
+              {/* 9. Executive Summary */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">9. Executive Summary</h3>
+                <div className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg">
+                  {selectedReport.content?.executiveSummary || 'No executive summary available.'}
                 </div>
               </div>
 
-              {/* Part O: Signatures */}
+              {/* 10. Timeline */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">O. Signatures</h3>
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">10. Investigation Timeline</h3>
+                {selectedReport.content?.timeline && selectedReport.content.timeline.length > 0 ? (
+                  selectedReport.content.timeline.map((day, i) => (
+                    <div key={i}>
+                      <h4 className="font-semibold text-sm text-blue-600 mt-2">{day.date}</h4>
+                      {day.events.map((event, j) => (
+                        <div key={j} className="flex gap-3 text-sm py-1 border-b border-gray-100">
+                          <span className="text-gray-500 w-16">{event.time}</span>
+                          <div>
+                            <div className="font-medium">{event.event}</div>
+                            <div className="text-gray-500 text-xs">{event.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No timeline events available.</p>
+                )}
+              </div>
+
+              {/* 11. Forensic Score & Risk Assessment */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">11. Forensic Score & Risk Assessment</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-sm text-gray-500">Forensic Score</p>
+                    <p className="text-2xl font-bold text-green-700">{selectedReport.content?.forensicScore?.score || 0}%</p>
+                    <p className="text-sm text-green-600">{selectedReport.content?.forensicScore?.level || 'Not Rated'}</p>
+                    {selectedReport.content?.forensicScore?.factors && selectedReport.content.forensicScore.factors.length > 0 && (
+                      <ul className="text-xs mt-2 list-disc list-inside">
+                        {selectedReport.content.forensicScore.factors.map((factor, i) => (
+                          <li key={i}>{factor}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                    <p className="text-sm text-gray-500">Risk Assessment</p>
+                    <p className="text-2xl font-bold text-red-700">{selectedReport.content?.riskAssessment?.level || 'Not Rated'}</p>
+                    <p className="text-sm text-red-600">Score: {selectedReport.content?.riskAssessment?.score || 0}/100</p>
+                    {selectedReport.content?.riskAssessment?.factors && selectedReport.content.riskAssessment.factors.length > 0 && (
+                      <ul className="text-xs mt-2 list-disc list-inside">
+                        {selectedReport.content.riskAssessment.factors.map((factor, i) => (
+                          <li key={i}>{factor}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 12. Recommendations */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">12. Recommendations</h3>
+                {selectedReport.content?.recommendations && selectedReport.content.recommendations.length > 0 ? (
+                  selectedReport.content.recommendations.map((r, i) => (
+                    <div key={i} className="text-sm p-2 bg-blue-50 rounded text-blue-800 mt-1">• {r}</div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No recommendations available.</p>
+                )}
+              </div>
+
+              {/* 13. Conclusion */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">13. Conclusion</h3>
+                <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg">
+                  {selectedReport.content?.conclusion || 'No conclusion available.'}
+                </p>
+              </div>
+
+              {/* 14. Signatures */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">14. Signatures</h3>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="font-semibold">{selectedReport.signatures.leadInvestigator}</p>
+                    <p className="font-semibold">{selectedReport.signatures?.leadInvestigator || 'Samina Parveen'}</p>
                     <div className="border-b border-gray-400 my-1"></div>
                     <p className="text-xs text-gray-500">Lead Investigator</p>
-                    <p className="text-xs text-gray-400">{selectedReport.signatures.leadDate}</p>
+                    <p className="text-xs text-gray-400">{selectedReport.signatures?.leadDate || formatDate(new Date().toISOString())}</p>
                   </div>
                   <div>
-                    <p className="font-semibold">{selectedReport.signatures.reviewer}</p>
+                    <p className="font-semibold">{selectedReport.signatures?.reviewer || 'Not Assigned'}</p>
                     <div className="border-b border-gray-400 my-1"></div>
                     <p className="text-xs text-gray-500">Reviewer</p>
-                    <p className="text-xs text-gray-400">{selectedReport.signatures.reviewDate}</p>
+                    <p className="text-xs text-gray-400">{selectedReport.signatures?.reviewDate || 'Pending'}</p>
                   </div>
                   <div>
-                    <p className="font-semibold">{selectedReport.signatures.laboratoryManager}</p>
+                    <p className="font-semibold">{selectedReport.signatures?.laboratoryManager || 'Not Assigned'}</p>
                     <div className="border-b border-gray-400 my-1"></div>
                     <p className="text-xs text-gray-500">Laboratory Manager</p>
-                    <p className="text-xs text-gray-400">{selectedReport.signatures.labManagerDate}</p>
+                    <p className="text-xs text-gray-400">{selectedReport.signatures?.labManagerDate || 'Pending'}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Evidence Summary */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Evidence Summary</h3>
-                <p className="text-sm text-gray-500 mb-2">Total: {selectedReport.content.evidenceSummary.total} items</p>
-                <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {selectedReport.content.evidenceSummary.items.map((item, i) => (
-                    <div key={i} className="flex justify-between text-sm p-2 bg-gray-50 rounded">
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-gray-500">{item.type} • {item.size}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Metadata Analysis */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Metadata Analysis</h3>
-                <p className="text-sm text-gray-500 mb-2">Files Analyzed: {selectedReport.content.metadataAnalysis.filesAnalyzed}</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mb-2">{selectedReport.content.metadataAnalysis.summary}</p>
-                <div className="space-y-1">
-                  {selectedReport.content.metadataAnalysis.findings.map((finding, i) => (
-                    <div key={i} className="text-sm p-2 bg-blue-50 rounded text-blue-800">• {finding}</div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Timeline */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Investigation Timeline</h3>
-                {selectedReport.content.timeline.map((day, i) => (
-                  <div key={i}>
-                    <h4 className="font-semibold text-sm text-blue-600 mt-2">{day.date}</h4>
-                    {day.events.map((event, j) => (
-                      <div key={j} className="flex gap-3 text-sm py-1 border-b border-gray-100">
-                        <span className="text-gray-500 w-16">{event.time}</span>
-                        <div>
-                          <div className="font-medium">{event.event}</div>
-                          <div className="text-gray-500 text-xs">{event.description}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-
-              {/* Log Analysis */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Log Analysis</h3>
-                <div className="grid grid-cols-3 gap-2 text-sm mb-2">
-                  <div className="p-2 bg-gray-50 rounded text-center">
-                    <span className="text-gray-500">Total Lines</span>
-                    <div className="font-bold">{selectedReport.content.logAnalysis.totalLines}</div>
-                  </div>
-                  <div className="p-2 bg-yellow-50 rounded text-center">
-                    <span className="text-yellow-600">Suspicious</span>
-                    <div className="font-bold text-yellow-700">{selectedReport.content.logAnalysis.suspicious}</div>
-                  </div>
-                  <div className="p-2 bg-red-50 rounded text-center">
-                    <span className="text-red-600">Threats</span>
-                    <div className="font-bold text-red-700">{selectedReport.content.logAnalysis.threats}</div>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mb-2">{selectedReport.content.logAnalysis.summary}</p>
-                <div className="space-y-1">
-                  {selectedReport.content.logAnalysis.findings.map((finding, i) => (
-                    <div key={i} className="text-sm p-2 bg-red-50 rounded text-red-800">• {finding}</div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Email Analysis */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Email Analysis</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm mb-2">
-                  <div className="p-2 bg-gray-50 rounded text-center">
-                    <span className="text-gray-500">Total Analyzed</span>
-                    <div className="font-bold">{selectedReport.content.emailAnalysis.totalAnalyzed}</div>
-                  </div>
-                  <div className="p-2 bg-red-50 rounded text-center">
-                    <span className="text-red-600">Suspicious</span>
-                    <div className="font-bold text-red-700">{selectedReport.content.emailAnalysis.suspicious}</div>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mb-2">{selectedReport.content.emailAnalysis.summary}</p>
-                <div className="space-y-1">
-                  {selectedReport.content.emailAnalysis.findings.map((finding, i) => (
-                    <div key={i} className="text-sm p-2 bg-red-50 rounded text-red-800">• {finding}</div>
-                  ))}
-                </div>
-              </div>
-
-              {/* OSINT Findings */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">OSINT Findings</h3>
-                <p className="text-sm text-gray-500 mb-2">Searches Performed: {selectedReport.content.osintFindings.searchesPerformed}</p>
-                <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded mb-2">{selectedReport.content.osintFindings.summary}</p>
-                <div className="space-y-1">
-                  {selectedReport.content.osintFindings.findings.map((finding, i) => (
-                    <div key={i} className="text-sm p-2 bg-blue-50 rounded text-blue-800">• {finding}</div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Incident Response */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Incident Response</h3>
-                <p className="text-sm text-gray-500 mb-2">Plan Applied: {selectedReport.content.incidentResponse.planApplied}</p>
-                <p className="text-sm text-gray-500 mb-2">Status: <span className="text-green-600 font-medium">{selectedReport.content.incidentResponse.status}</span></p>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700">Containment</h4>
-                    <ul className="text-sm list-disc list-inside pl-2">
-                      {selectedReport.content.incidentResponse.containment.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700">Eradication</h4>
-                    <ul className="text-sm list-disc list-inside pl-2">
-                      {selectedReport.content.incidentResponse.eradication.map((item, i) => (
-                        <li key={i}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <h4 className="text-sm font-semibold text-gray-700">Lessons Learned</h4>
-                  <ul className="text-sm list-disc list-inside pl-2">
-                    {selectedReport.content.incidentResponse.lessonsLearned.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Forensic Score & Risk Assessment */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Forensic Score & Risk Assessment</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <p className="text-sm text-gray-500">Forensic Score</p>
-                    <p className="text-2xl font-bold text-green-700">{selectedReport.content.forensicScore.score}%</p>
-                    <p className="text-sm text-green-600">{selectedReport.content.forensicScore.level} Level</p>
-                    <ul className="text-xs mt-2 list-disc list-inside">
-                      {selectedReport.content.forensicScore.factors.map((factor, i) => (
-                        <li key={i}>{factor}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="p-4 bg-red-50 rounded-lg">
-                    <p className="text-sm text-gray-500">Risk Assessment</p>
-                    <p className="text-2xl font-bold text-red-700">{selectedReport.content.riskAssessment.level}</p>
-                    <p className="text-sm text-red-600">Score: {selectedReport.content.riskAssessment.score}/100</p>
-                    <ul className="text-xs mt-2 list-disc list-inside">
-                      {selectedReport.content.riskAssessment.factors.map((factor, i) => (
-                        <li key={i}>{factor}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recommendations */}
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Recommendations</h3>
-                {selectedReport.content.recommendations.map((r, i) => (
-                  <div key={i} className="text-sm p-2 bg-blue-50 rounded text-blue-800 mt-1">• {r}</div>
-                ))}
-              </div>
-
-              {/* Conclusion */}
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2 mb-3">Conclusion</h3>
-                <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg">{selectedReport.content.conclusion}</p>
-              </div>
-
-              {/* Footer */}
               <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
-                <p>Generated by TraceLens AI © {new Date().getFullYear()} {selectedReport.organization.name}</p>
-                <p>Digital Forensics Division • {selectedReport.organization.address}</p>
+                <p>Generated by TraceLens AI © {new Date().getFullYear()} {selectedReport.organization?.name || 'SamiNova Cybersecurity'}</p>
+                <p>Digital Forensics Division • {selectedReport.organization?.address || 'Islamabad, Pakistan'}</p>
                 <p>Report ID: {selectedReport.id} • Version: {selectedReport.version} • Status: {selectedReport.status}</p>
-                <p>This report is confidential and intended for authorized use only.</p>
+                <p className="mt-1">This report is confidential and intended for authorized use only.</p>
               </div>
 
             </div>
@@ -1421,7 +1345,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Select Case Modal - FIXED with proper key */}
+      {/* Select Case Modal */}
       {showCaseModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1A2332] rounded-2xl border border-[#1E293B] w-full max-w-lg p-6">
